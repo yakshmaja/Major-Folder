@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiUser, FiLock, FiUserPlus, FiAlertTriangle } from 'react-icons/fi';
 
-import { API_URL } from '../config';
+const API_URL = 'http://localhost:8000';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
