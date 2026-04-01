@@ -1,0 +1,168 @@
+"""
+Email service for sending fire risk alerts via SMTP.
+"""
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USER = os.getenv('SMTP_USER', '')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
+
+
+def get_risk_color(risk_label: str) -> str:
+    """Get color for risk level."""
+    colors = {
+        'Low': '#22c55e',
+        'Medium': '#f59e0b',
+        'High': '#f97316',
+        'Critical': '#ef4444'
+    }
+    return colors.get(risk_label, '#6b7280')
+
+
+def create_alert_email(
+    risk_label: str,
+    confidence: float,
+    weather: dict,
+    latitude: float,
+    longitude: float,
+    probabilities: dict
+) -> str:
+    """Create HTML email body for fire risk alert."""
+    risk_color = get_risk_color(risk_label)
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }}
+            .header {{ background: linear-gradient(135deg, #e74c3c, #f39c12); padding: 30px; text-align: center; }}
+            .header h1 {{ color: white; margin: 0; font-size: 28px; }}
+            .header p {{ color: rgba(255,255,255,0.9); margin: 8px 0 0; }}
+            .content {{ padding: 30px; }}
+            .risk-badge {{ display: inline-block; background: {risk_color}; color: white; padding: 12px 24px; border-radius: 25px; font-size: 20px; font-weight: bold; margin: 10px 0; }}
+            .section {{ background: #0f3460; border-radius: 12px; padding: 20px; margin: 15px 0; }}
+            .section h3 {{ color: #f39c12; margin-top: 0; }}
+            .weather-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
+            .weather-item {{ text-align: center; padding: 10px; background: #1a1a2e; border-radius: 8px; }}
+            .weather-item .value {{ font-size: 22px; font-weight: bold; color: #f39c12; }}
+            .weather-item .label {{ color: #aaa; font-size: 12px; }}
+            .footer {{ text-align: center; padding: 20px; color: #888; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔥 FireSight Alert</h1>
+                <p>Forest Fire Risk Prediction Report</p>
+            </div>
+            <div class="content">
+                <div style="text-align: center; margin: 20px 0;">
+                    <p style="color: #aaa; margin-bottom: 5px;">Predicted Risk Level</p>
+                    <div class="risk-badge">{risk_label.upper()}</div>
+                    <p style="color: #aaa;">Confidence: {confidence}%</p>
+                </div>
+
+                <div class="section">
+                    <h3>📍 Location Details</h3>
+                    <p><strong>Latitude:</strong> {latitude}</p>
+                    <p><strong>Longitude:</strong> {longitude}</p>
+                    <p><strong>Data Source:</strong> {weather.get('source', 'N/A')}</p>
+                </div>
+
+                <div class="section">
+                    <h3>🌦 Weather Conditions</h3>
+                    <div class="weather-grid">
+                        <div class="weather-item">
+                            <div class="value">{weather.get('temperature', 'N/A')}°C</div>
+                            <div class="label">Temperature</div>
+                        </div>
+                        <div class="weather-item">
+                            <div class="value">{weather.get('humidity', 'N/A')}%</div>
+                            <div class="label">Humidity</div>
+                        </div>
+                        <div class="weather-item">
+                            <div class="value">{weather.get('wind_speed', 'N/A')} m/s</div>
+                            <div class="label">Wind Speed</div>
+                        </div>
+                        <div class="weather-item">
+                            <div class="value">{weather.get('rainfall', 'N/A')} mm</div>
+                            <div class="label">Rainfall</div>
+                        </div>
+                    </div>
+                    <p style="margin-top: 10px; color: #aaa;">Condition: {weather.get('description', 'N/A')}</p>
+                </div>
+
+                <div class="section">
+                    <h3>📊 Risk Probabilities</h3>
+                    {"".join(f'<p><span style="color: {get_risk_color(k)}">{k}</span>: {v}%</p>' for k, v in probabilities.items())}
+                </div>
+            </div>
+            <div class="footer">
+                <p>This alert was generated by FireSight — AI-Powered Forest Fire Risk Prediction</p>
+                <p>© 2024 FireSight. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+
+def send_alert_email(
+    to_email: str,
+    risk_label: str,
+    confidence: float,
+    weather: dict,
+    latitude: float,
+    longitude: float,
+    probabilities: dict
+) -> dict:
+    """Send fire risk alert email via SMTP."""
+    if not SMTP_USER or SMTP_USER == 'your_email@gmail.com':
+        return {
+            'success': False,
+            'message': 'SMTP not configured. Please set SMTP credentials in .env file.'
+        }
+
+    try:
+        html_body = create_alert_email(
+            risk_label, confidence, weather, latitude, longitude, probabilities
+        )
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'🔥 FireSight Alert: {risk_label} Fire Risk Detected'
+        msg['From'] = SMTP_USER
+        msg['To'] = to_email
+
+        # Plain text fallback
+        text_body = (
+            f"FireSight Fire Risk Alert\n\n"
+            f"Risk Level: {risk_label} ({confidence}% confidence)\n"
+            f"Location: {latitude}, {longitude}\n"
+            f"Temperature: {weather.get('temperature')}°C\n"
+            f"Humidity: {weather.get('humidity')}%\n"
+            f"Wind Speed: {weather.get('wind_speed')} m/s\n"
+            f"Rainfall: {weather.get('rainfall')} mm\n"
+        )
+
+        msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to_email, msg.as_string())
+
+        return {'success': True, 'message': f'Alert sent to {to_email}'}
+
+    except Exception as e:
+        return {'success': False, 'message': f'Failed to send email: {str(e)}'}
