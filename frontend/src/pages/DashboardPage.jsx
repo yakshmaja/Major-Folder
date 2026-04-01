@@ -5,7 +5,7 @@ import HeatMap from '../components/HeatMap';
 import WeatherCard from '../components/WeatherCard';
 import PredictionForm from '../components/PredictionForm';
 
-const API_URL = 'http://localhost:8000';
+import { API_URL } from '../config';
 
 export default function DashboardPage() {
   const [prediction, setPrediction] = useState(null);
